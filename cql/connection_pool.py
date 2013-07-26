@@ -20,7 +20,7 @@ from threading import Thread
 from time import sleep
 # from cql.connection import Connection
 from cql.native import NativeConnection
-from cql.thriftteries import ThriftConnection
+from cql.thrifteries import ThriftConnection
 
 
 __all__ = ['ConnectionPool']
