@@ -16,6 +16,7 @@
 
 from cql.apivalues import ProgrammingError, NotSupportedError
 
+
 class Connection(object):
     cql_major_version = 3
 
@@ -86,6 +87,8 @@ class Connection(object):
           implement this method with void functionality.'
         """
         return
+    def is_open(self):
+        return self.open_socket
 
     def rollback(self):
         raise NotSupportedError("Rollback functionality not present in Cassandra.")
