@@ -916,6 +916,7 @@ class NativeConnection(Connection):
             else:
                 results[r] = result
                 waiting_for.remove(r)
+                self.free_id(r)
         while waiting_for:
             newmsg = read_frame(self.socketf, decompressor=self.decompressor)
             if newmsg.stream_id in waiting_for:
@@ -934,9 +935,8 @@ class NativeConnection(Connection):
         and return the msg.
         """
 
-        result = self.wait_for_results(reqid)[reqid]
-        self.free_id(reqid)
-        return result
+        return self.wait_for_results(reqid)[reqid]
+        
 
     def handle_incoming(self, msg):
         if msg.stream_id < 0:
