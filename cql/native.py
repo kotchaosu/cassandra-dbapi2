@@ -784,13 +784,19 @@ class NativeConnection(Connection):
     cursorclass = NativeCursor
 
     def __init__(self, *args, **kwargs):
-        self.make_reqid = itertools.count().next
         self.responses = {}
+        self.ids = range(0,127)
         self.waiting = {}
         self.conn_ready = False
         self.compressor = self.decompressor = None
         self.event_watchers = {}
         Connection.__init__(self, *args, **kwargs)
+
+    def aquire_id(self):
+        self.ids.pop(0)
+    
+    def free_id(self, rid):
+        self.ids.append(rid)
 
     def establish_connection(self):
         self.conn_ready = False
@@ -870,7 +876,7 @@ class NativeConnection(Connection):
         return self.wait_for_requests(msg)[0]
 
     def send_msg(self, msg):
-        reqid = self.make_reqid()
+        reqid = self.aquire_id()
         msg.send(self.socketf, reqid, compression=self.compressor)
         return reqid
 
@@ -928,7 +934,9 @@ class NativeConnection(Connection):
         and return the msg.
         """
 
-        return self.wait_for_results(reqid)[reqid]
+        result = self.wait_for_results(reqid)[reqid]
+        self.free_id(reqid)
+        return result
 
     def handle_incoming(self, msg):
         if msg.stream_id < 0:
