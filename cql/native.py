@@ -116,6 +116,7 @@ class _MessageType(object):
             body = compression(body)
             flags |= 0x1
         msglen = int32_pack(len(body))
+        print map(repr, (version, flags, streamid, self.opcode))
         header = ''.join(map(int8_pack, (version, flags, streamid, self.opcode))) \
                  + msglen
         f.write(header)
@@ -793,7 +794,7 @@ class NativeConnection(Connection):
         Connection.__init__(self, *args, **kwargs)
 
     def aquire_id(self):
-        self.ids.pop(0)
+        return self.ids.pop(0)
     
     def free_id(self, rid):
         self.ids.append(rid)
@@ -916,12 +917,12 @@ class NativeConnection(Connection):
             else:
                 results[r] = result
                 waiting_for.remove(r)
-                self.free_id(r)
         while waiting_for:
             newmsg = read_frame(self.socketf, decompressor=self.decompressor)
             if newmsg.stream_id in waiting_for:
                 results[newmsg.stream_id] = newmsg
                 waiting_for.remove(newmsg.stream_id)
+                self.free_id(newmsg.stream_id)
             else:
                 self.handle_incoming(newmsg)
             if None in waiting_for:
