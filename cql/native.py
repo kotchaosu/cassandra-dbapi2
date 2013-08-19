@@ -116,7 +116,6 @@ class _MessageType(object):
             body = compression(body)
             flags |= 0x1
         msglen = int32_pack(len(body))
-        print map(repr, (version, flags, streamid, self.opcode))
         header = ''.join(map(int8_pack, (version, flags, streamid, self.opcode))) \
                  + msglen
         f.write(header)
