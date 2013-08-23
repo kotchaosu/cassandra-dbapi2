@@ -82,18 +82,12 @@ class ConnectionPool(object):
         return connection
 
     def return_connection(self, connection):
-        # if self.connections.qsize() > self.max_conns:
-        #     connection.close()
-        #     return
-        # if not connection.is_open():
-        #     return
-        # self.connections.put(connection)
-        try:
-            self.connections.put(connection)
-        except Full:
+        if self.connections.qsize() > self.max_conns:
             connection.close()
-            if not connection.is_open():
-                return
+            return
+        if not connection.is_open():
+            return
+        self.connections.put(connection)
 
 
 class Eviction(Thread):
