@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from Queue import Queue, Empty
+from Queue import Queue, Empty, Full
 from threading import Thread
 from time import sleep
 # from cql.connection import Connection
@@ -42,7 +42,7 @@ class ConnectionPool(object):
     >>> pool.return_connection(conn)
     """
     def __init__(self, hostname, port=9160, keyspace=None, user=None,
-                 password=None, decoder=None, max_conns=25, max_idle=5,
+                 password=None, decoder=None, max_conns=100, max_idle=5,
                  eviction_delay=10000, native=False):
         self.hostname = hostname
         self.port = port
@@ -54,7 +54,8 @@ class ConnectionPool(object):
         self.max_idle = max_idle
         self.eviction_delay = eviction_delay
         self.native = native
-        self.connections = Queue()
+        # self.connections = Queue()
+        self.connections = Queue(maxsize=self.max_conns)
         self.connections.put(self.__create_connection())
         self.eviction = Eviction(self.connections,
                                  self.max_idle,
@@ -81,12 +82,18 @@ class ConnectionPool(object):
         return connection
 
     def return_connection(self, connection):
-        if self.connections.qsize() > self.max_conns:
+        # if self.connections.qsize() > self.max_conns:
+        #     connection.close()
+        #     return
+        # if not connection.is_open():
+        #     return
+        # self.connections.put(connection)
+        try:
+            self.connections.put(connection)
+        except Full:
             connection.close()
-            return
-        if not connection.is_open():
-            return
-        self.connections.put(connection)
+            if not connection.is_open():
+                return
 
 
 class Eviction(Thread):
