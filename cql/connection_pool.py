@@ -54,7 +54,6 @@ class ConnectionPool(object):
         self.max_idle = max_idle
         self.eviction_delay = eviction_delay
         self.native = native
-        # self.connections = Queue()
         self.connections = Queue(maxsize=self.max_conns)
         self.connections.put(self.__create_connection())
         self.eviction = Eviction(self.connections,
