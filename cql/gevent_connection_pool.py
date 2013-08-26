@@ -16,15 +16,26 @@
 # limitations under the License.
 
 from gevent.queue import Queue, Empty, Full
+from gevent.pool import Pool
 import gevent
 from threading import Thread
 from time import sleep
 # from cql.connection import Connection
 from cql.native import NativeConnection
-from cql.thrifteries import ThriftConnection
+# from cql.thrifteries import ThriftConnection
+from collections import defaultdict
 
+import time
 
 __all__ = ['ConnectionPool']
+
+
+def check_actual(s, d):
+    result = {k: v for k, v in d.items()}
+    for i in d:
+        if i not in s:
+            result.pop(i)
+    return result
 
 
 class ConnectionPool(object):
@@ -44,22 +55,14 @@ class ConnectionPool(object):
         self.eviction_delay = eviction_delay
         self.native = native
 
-        self.connections = Queue(maxsize=self.max_conns)
-        self.busy = Queue(maxsize=self.max_conns)
+        self.size = 0
+        self.pool = Queue(maxsize=max_conns)
+        self.eviction = Eviction(self)
 
-        self.connections.put(self.__create_connection())
-        self.eviction = Eviction(self.connections,
-                                 self.max_idle,
-                                 self.eviction_delay)
+        self.pool.put(self.__create_connection())
 
     def __create_connection(self):
-        if self.native:
-            return NativeConnection(self.hostname,
-                  port=self.port,
-                  keyspace=self.keyspace,
-                  user=self.user,
-                  password=self.password)
-        return ThriftConnection(self.hostname,
+        return NativeConnection(self.hostname,
               port=self.port,
               keyspace=self.keyspace,
               user=self.user,
@@ -67,41 +70,27 @@ class ConnectionPool(object):
 
     def borrow_connection(self):
         u"""Method for creating new/reusing free connections
-            2 queues:
-                > busy - keeps information of number of connections in use
-                > connections - keeps free connections to reuse
         """
-        try:
+        pool = self.pool
+        if pool.empty() and self.max_conns >= self.size:
             connection = self.__create_connection()
-            try:
-                connection = self.connections.get(block=False)
-            except Empty:
-                pass
-            finally:
-                self.busy.put(connection)
-                return connection
-        except Full:
-            # if busy is full, wait for free connections
-            connection.close()
-            gevent.sleep(.001)
-            return self.borrow_connection()
+            self.size += 1
+        else:
+            connection = pool.get(block=True)
+        return connection
 
     def return_connection(self, connection):
-        try:
-            self.busy.get(block=False)
-            # prevent overflowing connections Queue
-            self.connections.put(connection)
-        except Full:
-            connection.close()
+        self.pool.put(connection)
 
 
 class Eviction(Thread):
-    def __init__(self, connections, max_idle, eviction_delay):
+    def __init__(self, conn_pool):
         Thread.__init__(self)
 
-        self.connections = connections
-        self.max_idle = max_idle
-        self.eviction_delay = eviction_delay
+        self.conn_pool = conn_pool
+        self.connections = self.conn_pool.pool
+        self.max_idle = self.conn_pool.max_idle
+        self.eviction_delay = self.conn_pool.eviction_delay
 
         self.setDaemon(True)
         self.setName("EVICTION-THREAD")
@@ -114,4 +103,5 @@ class Eviction(Thread):
                 if connection:
                     if connection.is_open():
                         connection.close()
+                        self.conn_pool.size -= 1
             sleep(self.eviction_delay/1000)
