@@ -15,35 +15,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from Queue import Queue, Empty, Full
+from gevent.queue import Queue, Full
+from gevent.coros import BoundedSemaphore
 from threading import Thread
 from time import sleep
-# from cql.connection import Connection
 from cql.native import NativeConnection
-from cql.thrifteries import ThriftConnection
 
 
 __all__ = ['ConnectionPool']
 
 
+sem = BoundedSemaphore(2)
+
+
 class ConnectionPool(object):
-    """
-    Simple connection-caching pool implementation.
-
-    ConnectionPool provides the simplest possible connection pooling,
-    lazily creating new connections if needed as `borrow_connection' is
-    called.  Connections are re-added to the pool by `return_connection',
-    unless doing so would exceed the maximum pool size.
-
-    Example usage:
-    >>> pool = ConnectionPool("localhost", 9160, "Keyspace1")
-    >>> conn = pool.borrow_connection()
-    >>> conn.execute(...)
-    >>> pool.return_connection(conn)
+    """DIY: the same API as in connection_pool.py
     """
     def __init__(self, hostname, port=9160, keyspace=None, user=None,
-                 password=None, decoder=None, max_conns=100, max_idle=5,
-                 eviction_delay=10000, native=False):
+            password=None, decoder=None, max_conns=100, max_idle=5,
+            eviction_delay=10000, native=False):
         self.hostname = hostname
         self.port = port
         self.keyspace = keyspace
@@ -54,48 +44,48 @@ class ConnectionPool(object):
         self.max_idle = max_idle
         self.eviction_delay = eviction_delay
         self.native = native
-        self.connections = Queue(maxsize=self.max_conns)
-        self.connections.put(self.__create_connection())
-        self.eviction = Eviction(self.connections,
-                                 self.max_idle,
-                                 self.eviction_delay)
+
+        self.size = 0
+        self.pool = Queue(maxsize=max_conns)
+        self.eviction = Eviction(self)
+
+        self.pool.put(self.__create_connection())
 
     def __create_connection(self):
-        if self.native:
-            return NativeConnection(self.hostname,
-                  port=self.port,
-                  keyspace=self.keyspace,
-                  user=self.user,
-                  password=self.password)
-        return ThriftConnection(self.hostname,
+        return NativeConnection(self.hostname,
               port=self.port,
               keyspace=self.keyspace,
               user=self.user,
               password=self.password)
 
     def borrow_connection(self):
-        try:
-            connection = self.connections.get(block=False)
-        except Empty:
+        u"""Method for creating new/reusing free connections
+        """
+        sem.acquire()
+        pool = self.pool
+        if pool.empty() and self.max_conns >= self.size:
             connection = self.__create_connection()
+            self.size += 1
+        else:
+            connection = pool.get(block=True)
+        sem.release()
         return connection
 
     def return_connection(self, connection):
-        if self.connections.qsize() > self.max_conns:
+        try:
+            self.pool.put(connection)
+        except Full:
             connection.close()
-            return
-        if not connection.is_open():
-            return
-        self.connections.put(connection)
 
 
 class Eviction(Thread):
-    def __init__(self, connections, max_idle, eviction_delay):
+    def __init__(self, conn_pool):
         Thread.__init__(self)
 
-        self.connections = connections
-        self.max_idle = max_idle
-        self.eviction_delay = eviction_delay
+        self.conn_pool = conn_pool
+        self.connections = self.conn_pool.pool
+        self.max_idle = self.conn_pool.max_idle
+        self.eviction_delay = self.conn_pool.eviction_delay
 
         self.setDaemon(True)
         self.setName("EVICTION-THREAD")
@@ -108,7 +98,5 @@ class Eviction(Thread):
                 if connection:
                     if connection.is_open():
                         connection.close()
+                        self.conn_pool.size -= 1
             sleep(self.eviction_delay/1000)
-
-
-
