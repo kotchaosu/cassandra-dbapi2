@@ -15,27 +15,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from gevent.queue import Queue, Empty, Full
-from gevent.pool import Pool
-import gevent
+from gevent.queue import Queue, Full
+from gevent.coros import BoundedSemaphore
 from threading import Thread
 from time import sleep
-# from cql.connection import Connection
 from cql.native import NativeConnection
-# from cql.thrifteries import ThriftConnection
-from collections import defaultdict
 
-import time
 
 __all__ = ['ConnectionPool']
 
 
-def check_actual(s, d):
-    result = {k: v for k, v in d.items()}
-    for i in d:
-        if i not in s:
-            result.pop(i)
-    return result
+sem = BoundedSemaphore(2)
 
 
 class ConnectionPool(object):
@@ -71,16 +61,21 @@ class ConnectionPool(object):
     def borrow_connection(self):
         u"""Method for creating new/reusing free connections
         """
+        sem.acquire()
         pool = self.pool
         if pool.empty() and self.max_conns >= self.size:
             connection = self.__create_connection()
             self.size += 1
         else:
             connection = pool.get(block=True)
+        sem.release()
         return connection
 
     def return_connection(self, connection):
-        self.pool.put(connection)
+        try:
+            self.pool.put(connection)
+        except Full:
+            connection.close()
 
 
 class Eviction(Thread):
