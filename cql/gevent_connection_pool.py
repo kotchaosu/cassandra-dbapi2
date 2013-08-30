@@ -15,21 +15,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import gevent
+from gevent import Greenlet
 from gevent.queue import Queue, Full
 from gevent.coros import BoundedSemaphore
-from threading import Thread
-from time import sleep
 from cql.native import NativeConnection
 
 
 __all__ = ['ConnectionPool']
 
 
-sem = BoundedSemaphore(2)
+sem = BoundedSemaphore(4)
 
 
 class ConnectionPool(object):
     """DIY: the same API as in connection_pool.py
+
+       Added BoundedSemaphore in borrow_connection() to solve issue
+       with losing events during replay.
     """
     def __init__(self, hostname, port=9160, keyspace=None, user=None,
             password=None, decoder=None, max_conns=100, max_idle=5,
@@ -47,7 +50,7 @@ class ConnectionPool(object):
 
         self.size = 0
         self.pool = Queue(maxsize=max_conns)
-        self.eviction = Eviction(self)
+        Eviction(self).start()
 
         self.pool.put(self.__create_connection())
 
@@ -78,20 +81,18 @@ class ConnectionPool(object):
             connection.close()
 
 
-class Eviction(Thread):
+class Eviction(Greenlet):
+    u"""Takes care of idle connections
+    """
     def __init__(self, conn_pool):
-        Thread.__init__(self)
+        Greenlet.__init__(self)
 
         self.conn_pool = conn_pool
         self.connections = self.conn_pool.pool
         self.max_idle = self.conn_pool.max_idle
         self.eviction_delay = self.conn_pool.eviction_delay
 
-        self.setDaemon(True)
-        self.setName("EVICTION-THREAD")
-        self.start()
-
-    def run(self):
+    def _run(self):
         while(True):
             while(self.connections.qsize() > self.max_idle):
                 connection = self.connections.get(block=False)
@@ -99,4 +100,4 @@ class Eviction(Thread):
                     if connection.is_open():
                         connection.close()
                         self.conn_pool.size -= 1
-            sleep(self.eviction_delay/1000)
+            gevent.sleep(self.eviction_delay/1000)
