@@ -73,7 +73,7 @@ class Cursor:
         # note that 'decoder' here is actually the decoder class, not the
         # instance to be used for decoding. bad naming, but it's in use now.
         if isinstance(cql_query, unicode):
-            raise ValueError("CQL query must be bytes, not unicode")
+            cql_query = cql_query.encode('utf-8')
         self.pre_execution_setup()
         prepared_q = self.prepare_inline(cql_query, params)
         cl = consistency_level or self.consistency_level
