@@ -47,8 +47,8 @@ class ConnectionPool(object):
         self.max_idle = max_idle
         self.eviction_delay = eviction_delay
         self.native = native
-
         self.size = 0
+
         self.pool = Queue(maxsize=max_conns)
         Eviction(self).start()
 
@@ -65,12 +65,15 @@ class ConnectionPool(object):
         u"""Method for creating new/reusing free connections
         """
         sem.acquire()
+        
         pool = self.pool
+        
         if pool.empty() and self.max_conns >= self.size:
             connection = self.__create_connection()
             self.size += 1
         else:
             connection = pool.get(block=True)
+        
         sem.release()
         return connection
 
@@ -100,4 +103,5 @@ class Eviction(Greenlet):
                     if connection.is_open():
                         connection.close()
                         self.conn_pool.size -= 1
+            
             gevent.sleep(self.eviction_delay/1000)
