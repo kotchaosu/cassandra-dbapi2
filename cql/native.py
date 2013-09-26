@@ -24,6 +24,7 @@ from cql.apivalues import ProgrammingError, OperationalError
 from cql.query import PreparedQuery, prepare_query, cql_quote_name
 import socket
 import itertools
+
 try:
     from cStringIO import StringIO
 except ImportError:
@@ -36,6 +37,7 @@ PROTOCOL_VERSION_MASK        = 0x7f
 HEADER_DIRECTION_FROM_CLIENT = 0x00
 HEADER_DIRECTION_TO_CLIENT   = 0x80
 HEADER_DIRECTION_MASK        = 0x80
+
 
 class ConsistencyLevel(object):
     @classmethod
@@ -60,6 +62,7 @@ class ConsistencyLevel(object):
                 'LOCAL_QUORUM': 6,
                 'EACH_QUORUM': 7}[name]
 
+
 class CqlResult:
     def __init__(self, column_metadata, rows):
         self.column_metadata = column_metadata
@@ -72,6 +75,7 @@ class CqlResult:
         return '<CqlResult: column_metadata=%r, rows=%r>' \
                % (self.column_metadata, self.rows)
     __repr__ = __str__
+
 
 class PreparedResult:
     def __init__(self, queryid, param_metadata):
@@ -87,11 +91,13 @@ class PreparedResult:
 _message_types_by_name = {}
 _message_types_by_opcode = {}
 
+
 class _register_msg_type(type):
     def __init__(cls, name, bases, dct):
         if not name.startswith('_'):
             _message_types_by_name[cls.name] = cls
             _message_types_by_opcode[cls.opcode] = cls
+
 
 class _MessageType(object):
     __metaclass__ = _register_msg_type
@@ -127,6 +133,7 @@ class _MessageType(object):
         return '<%s(%s)>' % (self.__class__.__name__, ', '.join(paramstrs))
     __repr__ = __str__
 
+
 def read_frame(f, decompressor=None):
     header = f.read(8)
     version, flags, stream, opcode = map(int8_unpack, header[:4])
@@ -149,7 +156,9 @@ def read_frame(f, decompressor=None):
     msg.stream_id = stream
     return msg
 
+
 error_classes = {}
+
 
 class ErrorMessage(_MessageType):
     opcode = 0x00
@@ -180,28 +189,35 @@ class ErrorMessage(_MessageType):
     def recv_error_info(f):
         pass
 
+
 class ErrorMessageSubclass(_register_msg_type):
     def __init__(cls, name, bases, dct):
         if cls.errorcode is not None:
             error_classes[cls.errorcode] = cls
 
+
 class ErrorMessageSub(ErrorMessage):
     __metaclass__ = ErrorMessageSubclass
     errorcode = None
 
+
 class RequestExecutionException(ErrorMessageSub):
     pass
 
+
 class RequestValidationException(ErrorMessageSub):
     pass
+
 
 class ServerError(ErrorMessageSub):
     summary = 'Server error'
     errorcode = 0x0000
 
+
 class ProtocolException(ErrorMessageSub):
     summary = 'Protocol error'
     errorcode = 0x000A
+
 
 class UnavailableExceptionErrorMessage(RequestExecutionException):
     summary = 'Unavailable exception'
@@ -215,20 +231,25 @@ class UnavailableExceptionErrorMessage(RequestExecutionException):
             'alive': read_int(f),
         }
 
+
 class OverloadedErrorMessage(RequestExecutionException):
     summary = 'Coordinator node overloaded'
     errorcode = 0x1001
+
 
 class IsBootstrappingErrorMessage(RequestExecutionException):
     summary = 'Coordinator node is bootstrapping'
     errorcode = 0x1002
 
+
 class TruncateError(RequestExecutionException):
     summary = 'Error during truncate'
     errorcode = 0x1003
 
+
 class RequestTimeoutException(RequestExecutionException):
     pass
+
 
 class WriteTimeoutErrorMessage(RequestTimeoutException):
     summary = 'Timeout during write request'
@@ -243,6 +264,7 @@ class WriteTimeoutErrorMessage(RequestTimeoutException):
             'writetype': read_string(f),
         }
 
+
 class ReadTimeoutErrorMessage(RequestTimeoutException):
     summary = 'Timeout during read request'
     errorcode = 0x1200
@@ -256,21 +278,26 @@ class ReadTimeoutErrorMessage(RequestTimeoutException):
             'data_present': bool(read_byte(f)),
         }
 
+
 class SyntaxException(RequestValidationException):
     summary = 'Syntax error in CQL query'
     errorcode = 0x2000
+
 
 class UnauthorizedErrorMessage(RequestValidationException):
     summary = 'Unauthorized'
     errorcode = 0x2100
 
+
 class InvalidRequestException(RequestValidationException):
     summary = 'Invalid query'
     errorcode = 0x2200
 
+
 class ConfigurationException(RequestValidationException):
     summary = 'Query invalid because of configuration issue'
     errorcode = 0x2300
+
 
 class AlreadyExistsException(ConfigurationException):
     summary = 'Item already exists'
@@ -282,6 +309,7 @@ class AlreadyExistsException(ConfigurationException):
             'keyspace': read_string(f),
             'table': read_string(f),
         }
+
 
 class StartupMessage(_MessageType):
     opcode = 0x01
@@ -298,6 +326,7 @@ class StartupMessage(_MessageType):
         optmap['CQL_VERSION'] = self.cqlversion
         write_stringmap(f, optmap)
 
+
 class ReadyMessage(_MessageType):
     opcode = 0x02
     name = 'READY'
@@ -306,6 +335,7 @@ class ReadyMessage(_MessageType):
     @classmethod
     def recv_body(cls, f):
         return cls()
+
 
 class AuthenticateMessage(_MessageType):
     opcode = 0x03
@@ -316,6 +346,7 @@ class AuthenticateMessage(_MessageType):
     def recv_body(cls, f):
         authname = read_string(f)
         return cls(authenticator=authname)
+
 
 class CredentialsMessage(_MessageType):
     opcode = 0x04
@@ -328,6 +359,7 @@ class CredentialsMessage(_MessageType):
             write_string(f, credkey)
             write_string(f, credval)
 
+
 class OptionsMessage(_MessageType):
     opcode = 0x05
     name = 'OPTIONS'
@@ -335,6 +367,7 @@ class OptionsMessage(_MessageType):
 
     def send_body(self, f):
         pass
+
 
 class SupportedMessage(_MessageType):
     opcode = 0x06
@@ -347,6 +380,7 @@ class SupportedMessage(_MessageType):
         cqlversions = options.pop('CQL_VERSION')
         return cls(cqlversions=cqlversions, options=options)
 
+
 class QueryMessage(_MessageType):
     opcode = 0x07
     name = 'QUERY'
@@ -355,6 +389,7 @@ class QueryMessage(_MessageType):
     def send_body(self, f):
         write_longstring(f, self.query)
         write_consistencylevel(f, self.consistencylevel)
+
 
 class ResultMessage(_MessageType):
     opcode = 0x08
@@ -469,6 +504,7 @@ class ResultMessage(_MessageType):
     def recv_row(f, colcount):
         return [read_value(f) for x in xrange(colcount)]
 
+
 class PrepareMessage(_MessageType):
     opcode = 0x09
     name = 'PREPARE'
@@ -476,6 +512,7 @@ class PrepareMessage(_MessageType):
 
     def send_body(self, f):
         write_longstring(f, self.query)
+
 
 class ExecuteMessage(_MessageType):
     opcode = 0x0A
@@ -489,10 +526,12 @@ class ExecuteMessage(_MessageType):
             write_value(f, param)
         write_consistencylevel(f, self.consistencylevel)
 
+
 known_event_types = frozenset((
     'TOPOLOGY_CHANGE',
     'STATUS_CHANGE',
 ))
+
 
 class RegisterMessage(_MessageType):
     opcode = 0x0B
@@ -501,6 +540,7 @@ class RegisterMessage(_MessageType):
 
     def send_body(self, f):
         write_stringlist(f, self.eventlist)
+
 
 class EventMessage(_MessageType):
     opcode = 0x0C
@@ -533,31 +573,40 @@ class EventMessage(_MessageType):
 def read_byte(f):
     return int8_unpack(f.read(1))
 
+
 def write_byte(f, b):
     f.write(int8_pack(b))
+
 
 def read_int(f):
     return int32_unpack(f.read(4))
 
+
 def write_int(f, i):
     f.write(int32_pack(i))
+
 
 def read_short(f):
     return uint16_unpack(f.read(2))
 
+
 def write_short(f, s):
     f.write(uint16_pack(s))
+
 
 def read_consistencylevel(f):
     return ConsistencyLevel.name_from_value(read_short(f))
 
+
 def write_consistencylevel(f, cl):
     write_short(f, ConsistencyLevel.value_from_name(cl))
+
 
 def read_string(f):
     size = read_short(f)
     contents = f.read(size)
     return contents.decode('utf8')
+
 
 def write_string(f, s):
     if isinstance(s, unicode):
@@ -565,10 +614,12 @@ def write_string(f, s):
     write_short(f, len(s))
     f.write(s)
 
+
 def read_longstring(f):
     size = read_int(f)
     contents = f.read(size)
     return contents.decode('utf8')
+
 
 def write_longstring(f, s):
     if isinstance(s, unicode):
@@ -576,15 +627,18 @@ def write_longstring(f, s):
     write_int(f, len(s))
     f.write(s)
 
+
 def read_shortbytes(f):
     size = read_short(f)
     contents = f.read(size)
     return contents.encode('hex')
 
+
 def write_shortbytes(f, sb):
     decoded = sb.decode('hex')
     write_short(f, len(decoded))
     f.write(decoded)
+
 
 def read_stringlist(f):
     numstrs = read_short(f)
@@ -595,6 +649,7 @@ def write_stringlist(f, stringlist):
     for s in stringlist:
         write_string(f, s)
 
+
 def read_stringmap(f):
     numpairs = read_short(f)
     strmap = {}
@@ -603,11 +658,13 @@ def read_stringmap(f):
         strmap[k] = read_string(f)
     return strmap
 
+
 def write_stringmap(f, strmap):
     write_short(f, len(strmap))
     for k, v in strmap.items():
         write_string(f, k)
         write_string(f, v)
+
 
 def read_stringmultimap(f):
     numkeys = read_short(f)
@@ -617,11 +674,13 @@ def read_stringmultimap(f):
         strmmap[k] = read_stringlist(f)
     return strmmap
 
+
 def write_stringmultimap(f, strmmap):
     write_short(f, len(strmmap))
     for k, v in strmmap.items():
         write_string(f, k)
         write_stringlist(f, v)
+
 
 def read_value(f):
     size = read_int(f)
@@ -629,12 +688,14 @@ def read_value(f):
         return None
     return f.read(size)
 
+
 def write_value(f, v):
     if v is None:
         write_int(f, -1)
     else:
         write_int(f, len(v))
         f.write(v)
+
 
 def read_inet(f):
     size = read_byte(f)
@@ -647,6 +708,7 @@ def read_inet(f):
     else:
         raise cql.InternalError("bad inet address: %r" % (addrbytes,))
     return (socket.inet_ntop(addrfam, addrbytes), port)
+
 
 def write_inet(f, addrtuple):
     addr, port = addrtuple
@@ -743,6 +805,7 @@ class NativeCursor(Cursor):
 
     compression = property(get_compression, set_compression)
 
+
 class debugsock:
     def __init__(self, sock):
         self.sock = sock
@@ -779,6 +842,7 @@ else:
             return ''
         return snappy.decompress(byts)
     locally_supported_compressions['snappy'] = (snappy.compress, decompress)
+
 
 class NativeConnection(Connection):
     cursorclass = NativeCursor
