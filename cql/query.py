@@ -19,6 +19,7 @@ from cql.apivalues import ProgrammingError
 from cql.cqltypes import lookup_casstype
 
 stringlit_re = re.compile(r"""('[^']*'|"[^"]*")""")
+# stringlit_re = re.compile(r"""('[^']*'|"[^"]*")""")
 comments_re = re.compile(r'(/\*(?:[^*]|\*[^/])*\*/|//.*$|--.*$)', re.MULTILINE)
 param_re = re.compile(r'''
     ( \W )            # don't match : at the beginning of the text (meaning it
@@ -29,22 +30,30 @@ param_re = re.compile(r'''
                       # a comment or string literal either
 ''', re.IGNORECASE | re.VERBOSE)
 
+
 def replace_param_substitutions(query, replacer):
     split_strings = stringlit_re.split(' ' + query + ' ')
+    
     split_str_and_cmt = []
+    
     for p in split_strings:
         if p[:1] in '\'"':
             split_str_and_cmt.append(p)
         else:
             split_str_and_cmt.extend(comments_re.split(p))
+    
     output = []
+    
     for p in split_str_and_cmt:
         if p[:1] in '\'"' or p[:2] in ('--', '//', '/*'):
             output.append(p)
         else:
             output.append(param_re.sub(replacer, p))
+    
     assert output[0][0] == ' ' and output[-1][-1] == ' '
+    
     return ''.join(output)[1:-1]
+
 
 class PreparedQuery(object):
     def __init__(self, querytext, itemid, vartypes, paramnames):
@@ -52,12 +61,14 @@ class PreparedQuery(object):
         self.itemid = itemid
         self.vartypes = map(lookup_casstype, vartypes)
         self.paramnames = paramnames
+        
         if len(self.vartypes) != len(self.paramnames):
             raise ProgrammingError("Length of variable types list is not the same"
                                    " length as the list of parameter names")
 
     def encode_params(self, params):
         return [t.to_binary(t.validate(params[n])) for (n, t) in zip(self.paramnames, self.vartypes)]
+
 
 def prepare_inline(query, params, cql_major_version=3):
     """
@@ -70,15 +81,19 @@ def prepare_inline(query, params, cql_major_version=3):
         return match.group(1) + cql_quote(params[match.group(2)], cql_major_version)
     return replace_param_substitutions(query, param_replacer)
 
+
 def prepare_query(querytext):
     paramnames = []
+    
     def found_param(match):
         pre_param_text = match.group(1)
         paramname = match.group(2)
         paramnames.append(paramname)
         return pre_param_text + '?'
+    
     transformed_query = replace_param_substitutions(querytext, found_param)
     return transformed_query, paramnames
+
 
 def cql_quote(term, cql_major_version=3):
     if isinstance(term, unicode):
@@ -90,9 +105,11 @@ def cql_quote(term, cql_major_version=3):
     else:
         return str(term)
 
+
 def __escape_quotes(term):
     assert isinstance(term, basestring)
     return term.replace("'", "''")
+
 
 def cql_quote_name(name):
     if isinstance(name, unicode):
