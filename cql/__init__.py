@@ -15,7 +15,6 @@
 # limitations under the License.
 
 from cql.apivalues import *
-from cql.connection import connect
 from cql import cqltypes
 
 
