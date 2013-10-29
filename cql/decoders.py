@@ -15,7 +15,7 @@
 # limitations under the License.
 
 from cql.apivalues import ProgrammingError
-from cql import cqltypes
+from cql import cqltypes, convert_to_utf8
 
 class SchemaDecoder(object):
     """
@@ -52,7 +52,7 @@ class SchemaDecoder(object):
         except Exception, e:
             value = self.value_decode_error(e, colname, valbytes,
                                             vtype.cql_parameterized_type())
-        return value
+        return convert_to_utf8(value)
 
     def decode_metadata_and_type_native(self, colid):
         ks, cf, colname, vtype = self.schema[colid]

@@ -110,7 +110,7 @@ class Cursor:
         bytevals = self.columnvalues(row)
         for val, vtype, nameinfo in zip(bytevals, self.column_types, self.name_info):
             values.append(self.decoder.decode_value(val, vtype, nameinfo[0]))
-        return cql.convert_to_utf8(values)
+        return values
 
     def fetchone(self):
         self.__checksock()
