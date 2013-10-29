@@ -18,8 +18,10 @@ import cql
 from cql.decoders import SchemaDecoder
 from cql.query import prepare_inline
 
+
 _COUNT_DESCRIPTION = (None, None, None, None, None, None, None)
 _VOID_DESCRIPTION = None
+
 
 class Cursor:
     default_decoder = SchemaDecoder
@@ -108,7 +110,7 @@ class Cursor:
         bytevals = self.columnvalues(row)
         for val, vtype, nameinfo in zip(bytevals, self.column_types, self.name_info):
             values.append(self.decoder.decode_value(val, vtype, nameinfo[0]))
-        return values
+        return cql.convert_to_utf8(values)
 
     def fetchone(self):
         self.__checksock()

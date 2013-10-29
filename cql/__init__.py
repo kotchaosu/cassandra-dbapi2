@@ -43,3 +43,17 @@ DATETIME = DBAPITypeObject(cqltypes.TimeUUIDType, cqltypes.DateType)
 
 # just include all of them
 ROWID = DBAPITypeObject(*cqltypes._cqltypes.values())
+
+
+def convert_to_utf8(inlet):
+    u"Converts all unicode strings to UTF-8"
+    _type = type(inlet)
+
+    if _type in [str, unicode]:
+        return inlet.encode('utf-8')
+    if _type in [set, list]:
+        return _type(convert_to_utf8(i) for i in inlet)
+    if _type in [dict]:
+        return _type((convert_to_utf8(k), convert_to_utf8(v)) for k, v in inlet.items())
+
+    return inlet
