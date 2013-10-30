@@ -49,11 +49,11 @@ def convert_to_utf8(inlet):
     u"Converts all unicode strings to UTF-8"
     _type = type(inlet)
 
-    if _type in [str, unicode]:
+    if isinstance(inlet, unicode):
         return inlet.encode('utf-8')
-    if _type in [set, list]:
+    if isinstance(inlet, set) or isinstance(inlet, list):
         return _type(convert_to_utf8(i) for i in inlet)
-    if _type in [dict]:
+    if isinstance(inlet, dict):
         return _type((convert_to_utf8(k), convert_to_utf8(v)) for k, v in inlet.items())
 
     return inlet
