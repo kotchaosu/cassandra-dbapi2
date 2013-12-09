@@ -50,7 +50,7 @@ def convert_to_utf8(inlet):
     _type = type(inlet)
 
     if isinstance(inlet, unicode):
-        return inlet.encode('utf-8')
+        return inlet.encode('utf-8', 'ignore')
     if isinstance(inlet, set) or isinstance(inlet, list):
         return _type(convert_to_utf8(i) for i in inlet)
     if isinstance(inlet, dict):
